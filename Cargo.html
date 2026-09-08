@@ -1965,7 +1965,7 @@
             </div>
             <div class="form-group">
                 <label>Ліміт посилок (точок)</label>
-                <input type="number" id="vPoints" value="60" min="1">
+                <input type="number" id="vPoints" value="100" min="1">
             </div>
             <div style="background:#fff3e0;padding:10px;border-radius:6px;font-size:11px;color:#e65100;margin-top:12px;">
                 ⚠️ Попередження з'явиться при перевищенні ваги або кількості точок
@@ -2101,10 +2101,10 @@ let colSettings = {header:['ttn','weight','dateReg','phone','vehicle','amount','
 let packages = [];
 
 let vehicles = [
-    {id:'v1', name:'Братислава марш.', maxWeight:2000, maxPoints:60},
-    {id:'v2', name:'Нітра марш.', maxWeight:2000, maxPoints:60},
-    {id:'v3', name:'Словаччина марш.', maxWeight:2000, maxPoints:60},
-    {id:'v4', name:'Кошице+прешов марш.', maxWeight:2000, maxPoints:60}
+    {id:'v1', name:'Братислава марш.', maxWeight:2000, maxPoints:100},
+    {id:'v2', name:'Нітра марш.', maxWeight:2000, maxPoints:100},
+    {id:'v3', name:'Словаччина марш.', maxWeight:2000, maxPoints:100},
+    {id:'v4', name:'Кошице+прешов марш.', maxWeight:2000, maxPoints:100}
 ];
 let filters = {date:'',vehicle:'',search:'',showArchive:false,statusFilter:'',routeVehicle:'',direction:'all',specialStatus:'',statusDateFrom:'',statusDateTo:'',showNewOnly:true};
 let selectedIds = new Set();
@@ -2320,8 +2320,30 @@ function playNotificationSound() {
     }
 }
 
-function loadSettings() { try { const s = JSON.parse(localStorage.getItem('yuraCrmPackagesV1')||'{}'); if(s.colSettings)colSettings=s.colSettings; if(s.hiddenCols)hiddenCols=new Set(s.hiddenCols); if(s.columnLabels){Object.keys(s.columnLabels).forEach(k=>{if(ALL_COLUMNS[k])ALL_COLUMNS[k].label=s.columnLabels[k];});} } catch(e){} }
-function saveSettings() { const columnLabels={}; Object.keys(ALL_COLUMNS).forEach(k=>{columnLabels[k]=ALL_COLUMNS[k].label;}); localStorage.setItem('yuraCrmPackagesV1', JSON.stringify({colSettings,vehicles,columnLabels,hiddenCols:[...hiddenCols]})); }
+// Версія збережених налаштувань. Підняли до 2 разом з лімітом точок
+// 60 → 100: старі записи в localStorage несуть 60 і, якби ми їх читали,
+// відкотили б новий ліміт назад. Тому vehicles відновлюємо лише з версії 2.
+const SETTINGS_VERSION = 2;
+
+function loadSettings() {
+    try {
+        const s = JSON.parse(localStorage.getItem('yuraCrmPackagesV1') || '{}');
+        if (s.colSettings) colSettings = s.colSettings;
+        if (s.hiddenCols) hiddenCols = new Set(s.hiddenCols);
+        if (s.columnLabels) {
+            Object.keys(s.columnLabels).forEach(k => {
+                if (ALL_COLUMNS[k]) ALL_COLUMNS[k].label = s.columnLabels[k];
+            });
+        }
+        // saveSettings клав vehicles у сховище, а loadSettings їх не читав —
+        // тому авто чи маршрут, доданий через «Налаштування», зникав на
+        // першому ж перезавантаженні сторінки.
+        if (s.settingsVersion >= SETTINGS_VERSION && Array.isArray(s.vehicles) && s.vehicles.length) {
+            vehicles = s.vehicles;
+        }
+    } catch (e) {}
+}
+function saveSettings() { const columnLabels={}; Object.keys(ALL_COLUMNS).forEach(k=>{columnLabels[k]=ALL_COLUMNS[k].label;}); localStorage.setItem('yuraCrmPackagesV1', JSON.stringify({settingsVersion:SETTINGS_VERSION,colSettings,vehicles,columnLabels,hiddenCols:[...hiddenCols]})); }
 
 // SIDE MENU
 function openSideMenu() { document.getElementById('sideMenu').classList.add('open'); document.getElementById('sideMenuOverlay').classList.add('show'); renderMobileCalendar(); updateMobileVehicles(); }
@@ -2815,9 +2837,9 @@ function renderCalendarTo(containerId) {
     let totalCapacity;
     if (filters.vehicle && filters.vehicle !== '' && filters.vehicle !== 'none') {
         const fv = vehicles.find(x => x.id === filters.vehicle);
-        totalCapacity = fv ? (parseInt(fv.maxPoints) || 60) : 0;
+        totalCapacity = fv ? (parseInt(fv.maxPoints) || 100) : 0;
     } else {
-        totalCapacity = vehicles.reduce((sum, v) => sum + (parseInt(v.maxPoints) || 60), 0);
+        totalCapacity = vehicles.reduce((sum, v) => sum + (parseInt(v.maxPoints) || 100), 0);
     }
     
     const firstDay = new Date(year, month, 1), lastDay = new Date(year, month + 1, 0);
@@ -2922,7 +2944,7 @@ function selectDate(dateStr) {
 
 // Перевірка місткості на дату (при виборі)
 function checkCapacityWarning(dateStr) {
-    const totalCapacity = vehicles.reduce((sum, v) => sum + (parseInt(v.maxPoints) || 60), 0);
+    const totalCapacity = vehicles.reduce((sum, v) => sum + (parseInt(v.maxPoints) || 100), 0);
     const seatsOnDate = packages
         .filter(p => p.dateReg === dateStr && p.status !== 'archived')
         .reduce((sum, p) => sum + (parseFloat(p.weight) || 1), 0);
@@ -2935,7 +2957,7 @@ function checkCapacityWarning(dateStr) {
 
 // Перевірка всіх дат на перевищення (при завантаженні та періодично)
 function checkAllCapacityWarnings() {
-    const totalCapacity = vehicles.reduce((sum, v) => sum + (parseInt(v.maxPoints) || 60), 0);
+    const totalCapacity = vehicles.reduce((sum, v) => sum + (parseInt(v.maxPoints) || 100), 0);
     if (totalCapacity === 0) return;
     
     // Групуємо по датах
@@ -6140,7 +6162,7 @@ function openAddVehicleModal() {
 function saveVehicle() {
     const name = document.getElementById('vName').value.trim();
     const maxWeight = parseInt(document.getElementById('vWeight').value) || 2000;
-    const maxPoints = parseInt(document.getElementById('vPoints').value) || 60;
+    const maxPoints = parseInt(document.getElementById('vPoints').value) || 100;
 
     if (!name) return showToast('Введіть назву авто');
 
@@ -7554,11 +7576,12 @@ function syncWithSheets() {
 }
 
 // SAVE - Додати нового пасажира на сервер
-function savePackageToServer(pkg) {
+function savePackageToServer(pkg, force) {
     showLoader('Збереження...', '');
 
     const payload = {
         action: 'addPackage',
+        force: !!force,
         fields: {
             direction: pkg.direction,
             vo: pkg.vo || '',
@@ -7606,6 +7629,29 @@ function savePackageToServer(pkg) {
             
             // Перевіряємо місткість після додавання
             checkAllCapacityWarnings();
+        } else if (data.error === 'duplicate' && !force) {
+            // Сервер відхиляє запис, якщо в таблиці вже лежить НЕархівована
+            // посилка з тим самим ТТН, ІД або парою телефон+ПіБ. Раніше тут
+            // був просто showToast('Помилка: duplicate') — посилка лишалась
+            // тільки в localStorage браузера, у «Бот Посилки» не потрапляла,
+            // і менеджер був певен, що додав її.
+            const dups = data.duplicates || [];
+            const list = dups.map(function (d) {
+                return '• ' + [d.name, d.ttn && ('ТТН ' + d.ttn), d.phone,
+                               d.status && ('статус: ' + d.status), d.reason]
+                    .filter(Boolean).join(' | ');
+            }).join('\n');
+            const ok = confirm(
+                'Схоже, така посилка вже є (' + dups.length + '):\n\n' +
+                list + '\n\n' +
+                'Найчастіша причина — стару посилку не заархівували.\n' +
+                'Додати все одно?'
+            );
+            if (ok) {
+                savePackageToServer(pkg, true);
+            } else {
+                showToast('❌ Не збережено на сервері — дублікат');
+            }
         } else {
             showToast('⚠️ Помилка: ' + data.error);
         }
@@ -7613,7 +7659,9 @@ function savePackageToServer(pkg) {
     .catch(err => {
         hideLoader();
         console.error('Save error:', err);
-        showToast('⚠️ Збережено локально');
+        // Це НЕ «збережено». Запис лишився лише в браузері, і без повторної
+        // синхронізації він загубиться — старий текст вводив в оману.
+        showToast('⚠️ Сервер недоступний — запис лише в браузері!');
     });
 }
 
